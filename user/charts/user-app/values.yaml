@@ -1,0 +1,58 @@
+replicaCount: 1
+image:
+  repository: victor2023victorovich/user-app
+  tag: latest
+  pullPolicy: IfNotPresent
+service:
+  type: NodePort
+  port: 8000
+  nodePort: 30080
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+  hosts:
+    - host: arch.homework
+      paths:
+        - path: /
+          pathType: Prefix
+    - host: localhost
+      paths:
+        - path: /
+          pathType: Prefix
+database:
+  exporter:
+    enabled: true
+    image: prometheuscommunity/postgres-exporter
+    tag: v0.14.0
+    port: 9187
+  url: jdbc:postgresql://postgres-postgresql:5432/user_db
+  username: postgres
+  password: postgres
+  driver: org.postgresql.Driver
+config:
+  spring:
+    jpa:
+      hibernate:
+        ddl-auto: validate
+    flyway:
+      enabled: true
+  jwt:
+    secret: "your-256-bit-secret-key-for-jwt-signing-here-please-change"
+monitoring:
+  enabled: true
+  interval: 15s
+  scrapeTimeout: 10s
+  labels: {}
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 10s
+    scrapeTimeout: 5s
+services:
+  billing:
+    url: "http://billing-app:8001"

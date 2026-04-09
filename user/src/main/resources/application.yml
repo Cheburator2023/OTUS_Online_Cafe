@@ -1,0 +1,79 @@
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5430/calculation_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-signing-here-please-change}
+    expiration: 86400000
+
+logging:
+  level:
+    org.springdoc: DEBUG
+    org.springframework.web: DEBUG
+    ru.otus.user: DEBUG
+    org.springframework.security: DEBUG
+
+server:
+  port: 8000
+  servlet:
+    context-path: /
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    distribution:
+      sla:
+        http.server.requests: 10ms, 50ms, 100ms, 200ms, 300ms, 400ms, 500ms, 600ms, 800ms
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+  observations:
+    key-values:
+      application: user-service
+
+springdoc:
+  swagger-ui:
+    path: /api
+    config-url: /v3/api-docs/swagger-config
+    url: /v3/api-docs
+    enabled: true
+    operations-sorter: alpha
+    tags-sorter: alpha
+    doc-expansion: none
+    display-request-duration: true
+    filter: true
+    persist-authorization: true
+  api-docs:
+    path: /v3/api-docs
+    groups:
+      enabled: true
+    enabled: true
+  packages-to-scan: ru.otus.user.controller
+  paths-to-match: /api/**
+  default-produces-media-type: application/json
+  default-consumes-media-type: application/json
+  cache:
+    disabled: true
+  show-actuator: false
+
+services:
+  billing:
+    url: http://billing-service:8001  # service name в Kubernetes
