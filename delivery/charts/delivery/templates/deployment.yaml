@@ -47,9 +47,3 @@ spec:
                 secretKeyRef:
                   name: {{ .Chart.Name }}-jwt-secret
                   key: jwt-secret
-            - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB
-              value: "TRACE"
-            - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_WEB_SERVLET_MVC_METHOD_ANNOTATION_REQUESTMAPPINGHANDLERMAPPING
-              value: "DEBUG"
-            - name: LOGGING_LEVEL_RU_OTUS_DELIVERY
-              value: "DEBUG"

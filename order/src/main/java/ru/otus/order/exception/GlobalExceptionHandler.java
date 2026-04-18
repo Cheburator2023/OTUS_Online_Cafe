@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import ru.otus.order.dto.ErrorResponse;
+import ru.otus.order.dto.NearestSlotsResponse;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
@@ -23,7 +24,12 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse("INSUFFICIENT_FUNDS", ex.getMessage()));
     }
 
-    // Обработка отсутствующего заголовка Idempotency-Key (как параметра запроса)
+    @ExceptionHandler(NoDeliverySlotAvailableException.class)
+    public ResponseEntity<NearestSlotsResponse> handleNoDeliverySlot(NoDeliverySlotAvailableException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(new NearestSlotsResponse(ex.getMessage(), ex.getNearestSlots()));
+    }
+
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ErrorResponse> handleMissingIdempotencyKey(MissingServletRequestParameterException ex) {
         if ("Idempotency-Key".equals(ex.getParameterName())) {
@@ -44,5 +50,11 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(new ErrorResponse("MISSING_HEADER", ex.getMessage()));
+    }
+
+    @ExceptionHandler(RuntimeException.class)
+    public ResponseEntity<ErrorResponse> handleRuntimeExceptions(RuntimeException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .body(new ErrorResponse("BAD_REQUEST", ex.getMessage()));
     }
 }

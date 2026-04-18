@@ -9,33 +9,20 @@ CREATE TABLE delivery_slots (
 CREATE INDEX idx_delivery_slots_time_slot ON delivery_slots(time_slot);
 CREATE INDEX idx_delivery_slots_order_id ON delivery_slots(order_id);
 
--- Предопределённые слоты
-INSERT INTO delivery_slots (time_slot, courier_id) VALUES
-                                                        ('2025-04-03 10:00:00+00', 1),
-                                                        ('2025-04-03 10:00:00+00', 2),
-                                                        ('2025-04-03 10:00:00+00', 3),
-                                                        ('2025-04-03 12:00:00+00', 1),
-                                                        ('2025-04-03 12:00:00+00', 2),
-                                                        ('2025-04-03 12:00:00+00', 3),
-                                                        ('2025-04-03 14:00:00+00', 1),
-                                                        ('2025-04-03 14:00:00+00', 2),
-                                                        ('2025-04-03 14:00:00+00', 3),
-                                                        ('2026-04-04 10:05:04+00', 1),
-                                                        ('2026-04-04 10:05:04+00', 2),
-                                                        ('2026-04-04 10:05:04+00', 3),
-                                                        ('2026-04-04 12:00:00+00', 1),
-                                                        ('2026-04-04 14:00:00+00', 2),
-                                                        ('2026-04-05 09:00:00+00', 1),
-                                                        ('2026-04-05 09:00:00+00', 2),
-                                                        ('2026-04-05 09:00:00+00', 3),
-                                                        ('2026-04-05 11:00:00+00', 1),
-                                                        ('2026-04-05 11:00:00+00', 2),
-                                                        ('2026-04-05 11:00:00+00', 3),
-                                                        ('2026-04-05 13:00:00+00', 2),
-                                                        ('2026-04-05 13:00:00+00', 3),
-                                                        ('2026-04-28 13:00:00+00', 1),
-                                                        ('2026-04-28 13:00:00+00', 2),
-                                                        ('2026-04-28 13:00:00+00', 3),
-                                                        ('2026-04-28 14:00:00+00', 1),
-                                                        ('2026-04-28 14:00:00+00', 2),
-                                                        ('2026-04-28 14:00:00+00', 3);
+-- Функция для генерации слотов на 7 дней вперёд с шагом 1 час
+DO $$
+DECLARE
+start_date TIMESTAMP := NOW();
+    end_date TIMESTAMP := NOW() + INTERVAL '7 days';
+    slot_time TIMESTAMP;
+    courier_ids BIGINT[] := ARRAY[1, 2, 3];
+    c_id BIGINT;
+BEGIN
+    slot_time := DATE_TRUNC('hour', start_date + INTERVAL '1 hour');
+    WHILE slot_time <= end_date LOOP
+        FOREACH c_id IN ARRAY courier_ids LOOP
+            INSERT INTO delivery_slots (time_slot, courier_id) VALUES (slot_time, c_id);
+END LOOP;
+        slot_time := slot_time + INTERVAL '1 hour';
+END LOOP;
+END $$;

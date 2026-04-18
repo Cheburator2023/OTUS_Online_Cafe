@@ -26,4 +26,22 @@ public class OrderController {
             @Valid @RequestBody CreateOrderRequest request) {
         return orderService.createOrder(idempotencyKey, request);
     }
+
+    @PostMapping("/{orderId}/confirm")
+    @Operation(summary = "Confirm pending order (accept waiting)")
+    public OrderResponse confirmOrder(@PathVariable Long orderId, @RequestParam boolean accept) {
+        return orderService.confirmPendingOrder(orderId, accept);
+    }
+
+    @PostMapping("/{orderId}/deliver")
+    @Operation(summary = "Mark order as delivered (by courier)")
+    public void deliverOrder(@PathVariable Long orderId) {
+        orderService.deliverOrder(orderId);
+    }
+
+    @PostMapping("/{orderId}/confirm-receipt")
+    @Operation(summary = "Confirm order receipt by customer")
+    public void confirmReceipt(@PathVariable Long orderId) {
+        orderService.confirmReceipt(orderId);
+    }
 }

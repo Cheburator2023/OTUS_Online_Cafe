@@ -8,6 +8,8 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "orders")
@@ -36,30 +38,49 @@ public class Order {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
-    // Новые поля
     @Setter
-    @Column(name = "product_id", nullable = false)
-    private Long productId;
-
-    @Setter
-    @Column(name = "quantity", nullable = false)
-    private Long quantity;
-
-    @Setter
-    @Column(name = "delivery_time", nullable = false)
+    @Column(name = "delivery_time")
     private LocalDateTime deliveryTime;
 
-    public Order(Long userId, BigDecimal amount, OrderStatus status,
-                 Long productId, Long quantity, LocalDateTime deliveryTime) {
+    @Setter
+    @Column(name = "preparation_time_minutes")
+    private Integer preparationTimeMinutes;
+
+    @Setter
+    @Column(name = "confirmed_at")
+    private Instant confirmedAt;
+
+    @Setter
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
+    @Setter
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<OrderItem> items = new ArrayList<>();
+
+    public Order(Long userId, BigDecimal amount, OrderStatus status, LocalDateTime deliveryTime) {
         this.userId = userId;
         this.amount = amount;
         this.status = status;
-        this.productId = productId;
-        this.quantity = quantity;
         this.deliveryTime = deliveryTime;
     }
 
+    public void addItem(OrderItem item) {
+        items.add(item);
+        item.setOrder(this);
+    }
+
     public enum OrderStatus {
-        SUCCESS, FAILED
+        PENDING,          // ожидает подтверждения клиента (есть товары на готовку)
+        CONFIRMED,        // подтверждён клиентом, средства списаны, товары и доставка зарезервированы
+        PREPARING,        // готовится
+        READY_FOR_DELIVERY,
+        DELIVERED,        // курьер доставил, ожидает подтверждения клиента
+        COMPLETED,        // клиент подтвердил получение
+        FAILED,
+        CANCELLED
     }
 }

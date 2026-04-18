@@ -11,6 +11,7 @@ import java.util.Optional;
 @Repository
 public interface DeliverySlotRepository extends JpaRepository<DeliverySlot, Long> {
     List<DeliverySlot> findByTimeSlot(LocalDateTime timeSlot);
-
     Optional<DeliverySlot> findByOrderId(Long orderId);
+    List<DeliverySlot> findByTimeSlotGreaterThanEqualAndReservedFalseOrderByTimeSlotAsc(LocalDateTime timeSlot);
+    List<DeliverySlot> findByReservedFalseOrderByTimeSlotAsc();
 }

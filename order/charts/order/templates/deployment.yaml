@@ -55,3 +55,7 @@ spec:
               value: {{ .Values.services.stock.url | quote }}
             - name: SERVICES_DELIVERY_URL
               value: {{ .Values.services.delivery.url | quote }}
+            - name: DELIVERY_MIN_DELIVERY_TIME_MINUTES
+              value: {{ .Values.env.DELIVERY_MIN_DELIVERY_TIME_MINUTES | quote }}
+            - name: SERVICES_USER_URL
+              value: {{ .Values.services.user.url | quote }}

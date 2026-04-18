@@ -1,7 +1,7 @@
 CREATE TABLE notifications (
                                id BIGSERIAL PRIMARY KEY,
                                user_id BIGINT NOT NULL,
-                               email VARCHAR(100) NOT NULL,
+                               email VARCHAR(100),
                                message TEXT NOT NULL,
                                created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

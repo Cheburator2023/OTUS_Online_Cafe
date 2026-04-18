@@ -12,6 +12,7 @@ import ru.otus.user.model.User;
 import ru.otus.user.repository.UserRepository;
 import ru.otus.user.security.JwtTokenProvider;
 import ru.otus.user.service.client.BillingServiceClient;
+import ru.otus.user.service.client.OrderServiceClient;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +23,7 @@ public class AuthService {
     private final UserMapper userMapper;
     private final MetricService metricService;
     private final BillingServiceClient billingServiceClient;
+    private final OrderServiceClient orderServiceClient;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -35,9 +37,12 @@ public class AuthService {
 
             User user = new User(request.name(), request.email(),
                     passwordEncoder.encode(request.password()));
+            user.setPhone(request.phone());
+            user.setDeliveryAddress(request.deliveryAddress());
             User savedUser = userRepository.save(user);
 
             billingServiceClient.createAccount(savedUser.getId(), savedUser.getEmail());
+            orderServiceClient.createCart(savedUser.getId());
 
             String token = jwtTokenProvider.generateToken(savedUser);
             UserResponse userResponse = userMapper.toResponse(savedUser);

@@ -45,7 +45,3 @@ logging:
     org.springframework: DEBUG
     ru.otus.delivery: DEBUG
     org.springframework.web: DEBUG
-    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping: DEBUG
-    org.springframework.web.servlet.DispatcherServlet: DEBUG
-
-debug: true

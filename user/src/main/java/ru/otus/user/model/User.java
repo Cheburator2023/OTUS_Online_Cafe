@@ -33,6 +33,14 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private String password;
 
+    @Setter
+    @Column(name = "phone")
+    private String phone;
+
+    @Setter
+    @Column(name = "delivery_address")
+    private String deliveryAddress;
+
     @Column(name = "created_at", updatable = false)
     private Instant createdAt = Instant.now();
 

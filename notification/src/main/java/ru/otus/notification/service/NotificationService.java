@@ -18,7 +18,7 @@ public class NotificationService {
 
     @Transactional
     public NotificationResponse createNotification(CreateNotificationRequest request) {
-        Notification notification = new Notification(request.userId(), request.email(), request.message());
+        Notification notification = new Notification(request.userId(), null, request.message());
         notification = notificationRepository.save(notification);
         return toResponse(notification);
     }

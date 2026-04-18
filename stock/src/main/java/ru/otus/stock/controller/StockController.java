@@ -10,10 +10,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import ru.otus.stock.dto.ErrorResponse;
-import ru.otus.stock.dto.ReleaseRequest;
-import ru.otus.stock.dto.ReserveRequest;
-import ru.otus.stock.dto.StockResponse;
+import ru.otus.stock.dto.*;
 import ru.otus.stock.service.StockService;
 
 @RestController
@@ -53,5 +50,17 @@ public class StockController {
     })
     public void release(@Valid @RequestBody ReleaseRequest request) {
         stockService.release(request);
+    }
+
+    @GetMapping("/products/{productId}/info")
+    @Operation(summary = "Get product info (availability, price, preparation time)")
+    public ProductInfoResponse getProductInfo(@PathVariable Long productId, @RequestParam Long quantity) {
+        return stockService.getProductInfo(productId, quantity);
+    }
+
+    @PostMapping("/commit")
+    @Operation(summary = "Commit reserved stock (reduce actual quantity)")
+    public void commitReservation(@RequestParam Long productId, @RequestParam Long quantity) {
+        stockService.commitReservation(productId, quantity);
     }
 }

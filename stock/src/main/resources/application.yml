@@ -31,9 +31,19 @@ management:
       percentiles:
         http.server.requests: 0.5,0.95,0.99
 
+springdoc:
+  packages-to-scan: ru.otus.stock.controller
+  paths-to-match: /api/v1/stock/**
+  use-management-port: false
+  show-actuator: false
+
 logging:
   level:
     org.springdoc: DEBUG
-    org.springframework.web: DEBUG
+    org.springframework: DEBUG
     ru.otus.stock: DEBUG
-    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping: DEBUG
+    org.springframework.web.servlet.DispatcherServlet: DEBUG
+
+debug: true

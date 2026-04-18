@@ -1,0 +1,585 @@
+{
+  "info": {
+    "name": "Online Cafe E2E Tests",
+    "description": "Исправленные тесты с корректной установкой переменных окружения и соответствием ТЗ",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "userUrl",
+      "value": "http://arch.homework",
+      "type": "string"
+    },
+    {
+      "key": "billingUrl",
+      "value": "http://billing.arch.homework",
+      "type": "string"
+    },
+    {
+      "key": "orderUrl",
+      "value": "http://order.arch.homework",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "orderId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Регистрация пользователя",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 201\", () => { pm.response.to.have.status(201); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.user.id).to.not.be.undefined;",
+              "pm.expect(jsonData.token).to.not.be.undefined;",
+              "pm.environment.set('userId', jsonData.user.id);",
+              "pm.environment.set('token', jsonData.token);",
+              "console.log('User created with id: ' + jsonData.user.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Тестовый Пользователь\",\n  \"email\": \"test@example.com\",\n  \"password\": \"securePass123\",\n  \"phone\": \"+79991234567\",\n  \"deliveryAddress\": \"г. Москва, ул. Ленина, д.1\"\n}"
+        },
+        "url": {
+          "raw": "{{userUrl}}/api/v1/auth/register",
+          "host": ["{{userUrl}}"],
+          "path": ["api", "v1", "auth", "register"]
+        }
+      }
+    },
+    {
+      "name": "2. Пополнение баланса (2000₽ для двух блюд)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.balance).to.eql(2000.00);",
+              "console.log('Balance after deposit: ' + jsonData.balance);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 2000.00\n}"
+        },
+        "url": {
+          "raw": "{{billingUrl}}/api/v1/accounts/{{userId}}/deposit",
+          "host": ["{{billingUrl}}"],
+          "path": ["api", "v1", "accounts", "{{userId}}", "deposit"]
+        }
+      }
+    },
+    {
+      "name": "3. Добавление товара в корзину (блюдо 1 – в наличии)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "const addedItem = jsonData.items.find(i => i.productId === 1);",
+              "pm.expect(addedItem).to.not.be.undefined;",
+              "pm.expect(addedItem.quantity).to.eql(1);",
+              "console.log('Item 1 (in stock) added');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": 1,\n  \"quantity\": 1\n}"
+        },
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}/items",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}", "items"]
+        }
+      }
+    },
+    {
+      "name": "4. Добавление товара в корзину (блюдо 2 – требует готовки)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "const addedItem = jsonData.items.find(i => i.productId === 2);",
+              "pm.expect(addedItem).to.not.be.undefined;",
+              "pm.expect(addedItem.quantity).to.eql(1);",
+              "console.log('Item 2 (requires cooking) added');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": 2,\n  \"quantity\": 1\n}"
+        },
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}/items",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}", "items"]
+        }
+      }
+    },
+    {
+      "name": "5. Просмотр корзины",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.items.length).to.eql(2);",
+              "console.log('Cart contains 2 items');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}"]
+        }
+      }
+    },
+    {
+      "name": "6. Сценарий A: клиент отказывается ждать (acceptWaiting=false) → ожидаем ошибку 400",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 400\", () => { pm.response.to.have.status(400); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.code).to.eql('BAD_REQUEST');",
+              "pm.expect(jsonData.message).to.include('require preparation');",
+              "console.log('Correctly rejected order with waiting products');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{userId}},\n  \"deliveryTime\": null,\n  \"acceptWaiting\": false\n}"
+        },
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}/checkout",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}", "checkout"]
+        }
+      }
+    },
+    {
+      "name": "7. Повторное добавление товаров для сценария B (корзина не очистилась, т.к. заказ не создался)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "console.log('Items still in cart');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": 1,\n  \"quantity\": 1\n}"
+        },
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}/items",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}", "items"]
+        }
+      }
+    },
+    {
+      "name": "8. Добавление блюда 2 (требует готовки) повторно",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "console.log('Item 2 re-added');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"productId\": 2,\n  \"quantity\": 1\n}"
+        },
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}/items",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}", "items"]
+        }
+      }
+    },
+    {
+      "name": "8.5. Установка корзины для сценария B (замена на 1 блюдо каждого типа)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.items.length).to.eql(2);",
+              "const item1 = jsonData.items.find(i => i.productId === 1);",
+              "pm.expect(item1.quantity).to.eql(1);",
+              "const item2 = jsonData.items.find(i => i.productId === 2);",
+              "pm.expect(item2.quantity).to.eql(1);",
+              "console.log('Cart successfully set to 1 item of each product');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"items\": [\n    { \"productId\": 1, \"quantity\": 1 },\n    { \"productId\": 2, \"quantity\": 1 }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}/items",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}", "items"]
+        }
+      }
+    },
+    {
+      "name": "9. Сценарий B: клиент согласен ждать (acceptWaiting=true) → создаётся PENDING заказ",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "// Сбрасываем orderId перед новым заказом",
+              "pm.environment.unset('orderId');",
+              "",
+              "// Получаем ближайший доступный слот доставки",
+              "const deliveryUrl = pm.environment.get(\"deliveryUrl\") || \"http://delivery.arch.homework\";",
+              "const afterTimeDate = new Date(Date.now() + 2 * 60 * 60 * 1000);",
+              "const year = afterTimeDate.getUTCFullYear();",
+              "const month = String(afterTimeDate.getUTCMonth() + 1).padStart(2, '0');",
+              "const day = String(afterTimeDate.getUTCDate()).padStart(2, '0');",
+              "const hours = String(afterTimeDate.getUTCHours()).padStart(2, '0');",
+              "const minutes = String(afterTimeDate.getUTCMinutes()).padStart(2, '0');",
+              "const seconds = String(afterTimeDate.getUTCSeconds()).padStart(2, '0');",
+              "const afterTime = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;",
+              "const url = `${deliveryUrl}/api/v1/delivery/slots/nearest?afterTime=${encodeURIComponent(afterTime)}&limit=1`;",
+              "pm.sendRequest({",
+              "    url: url,",
+              "    method: 'GET',",
+              "    header: { 'Authorization': 'Bearer ' + pm.environment.get('token') }",
+              "}, function (err, response) {",
+              "    if (err) {",
+              "        console.error(err);",
+              "        pm.environment.set('deliverySlotTime', '');",
+              "        return;",
+              "    }",
+              "    if (response.code !== 200) {",
+              "        console.warn('Delivery slots endpoint returned ' + response.code);",
+              "        pm.environment.set('deliverySlotTime', '');",
+              "        return;",
+              "    }",
+              "    const slots = response.json();",
+              "    if (!slots || slots.length === 0) {",
+              "        console.warn('No available delivery slots found');",
+              "        pm.environment.set('deliverySlotTime', '');",
+              "    } else {",
+              "        let slotTime = slots[0].timeSlot;",
+              "        if (slotTime && slotTime.includes('T')) {",
+              "            slotTime = slotTime.replace('T', ' ');",
+              "        }",
+              "        pm.environment.set('deliverySlotTime', slotTime);",
+              "        console.log('Selected delivery slot: ' + slotTime);",
+              "    }",
+              "});"
+            ],
+            "type": "text/javascript"
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.status).to.eql('PENDING');",
+              "pm.expect(jsonData.amount).to.eql(51.00);",
+              "pm.expect(jsonData.preparationTimeMinutes).to.be.at.least(10);",
+              "pm.environment.set('orderId', jsonData.id);",
+              "console.log('Pending order created with id: ' + jsonData.id);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"userId\": {{userId}},\n  \"deliveryTime\": \"{{deliverySlotTime}}\",\n  \"acceptWaiting\": true\n}"
+        },
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/carts/{{userId}}/checkout",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "carts", "{{userId}}", "checkout"]
+        }
+      }
+    },
+    {
+      "name": "10. Подтверждение заказа (accept=true)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.status).to.eql('CONFIRMED');",
+              "console.log('Order confirmed');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/orders/{{orderId}}/confirm?accept=true",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "orders", "{{orderId}}", "confirm"],
+          "query": [
+            {
+              "key": "accept",
+              "value": "true"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "11. Проверка баланса после списания (должно остаться 2000 - 51 = 1949.00)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "const jsonData = pm.response.json();",
+              "pm.expect(jsonData.balance).to.eql(1949.00);",
+              "console.log('Balance after order: ' + jsonData.balance);"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "{{billingUrl}}/api/v1/accounts/{{userId}}",
+          "host": ["{{billingUrl}}"],
+          "path": ["api", "v1", "accounts", "{{userId}}"]
+        }
+      }
+    },
+    {
+      "name": "12. Курьер отмечает доставку",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "console.log('Order marked as delivered by courier');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/orders/{{orderId}}/deliver",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "orders", "{{orderId}}", "deliver"]
+        }
+      }
+    },
+    {
+      "name": "13. Пользователь подтверждает получение",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test(\"Status code is 200\", () => { pm.response.to.have.status(200); });",
+              "console.log('Receipt confirmed by customer');"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Authorization", "value": "Bearer {{token}}" }
+        ],
+        "url": {
+          "raw": "{{orderUrl}}/api/v1/orders/{{orderId}}/confirm-receipt",
+          "host": ["{{orderUrl}}"],
+          "path": ["api", "v1", "orders", "{{orderId}}", "confirm-receipt"]
+        }
+      }
+    }
+  ]
+}

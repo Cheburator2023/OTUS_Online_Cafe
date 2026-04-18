@@ -25,13 +25,4 @@ public class SwaggerConfig {
                 .info(new Info().title("Stock Management API").version("1.0")
                         .description("API for product stock reservation"));
     }
-
-    @Bean
-    public GroupedOpenApi publicApi() {
-        return GroupedOpenApi.builder()
-                .group("stock")
-                .packagesToScan("ru.otus.stock.controller")
-                .pathsToMatch("/api/**")
-                .build();
-    }
 }

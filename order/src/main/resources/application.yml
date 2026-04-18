@@ -19,6 +19,9 @@ spring:
 server:
   port: 8003
 
+delivery:
+  min-delivery-time-minutes: ${DELIVERY_MIN_DELIVERY_TIME_MINUTES:30}
+
 management:
   endpoints:
     web:
@@ -39,3 +42,15 @@ logging:
     org.springframework.web: DEBUG
     ru.otus.order: DEBUG
     org.springframework.security: DEBUG
+
+services:
+  billing:
+    url: "http://billing-app:8001"
+  notification:
+    url: "http://notification-app:8002"
+  delivery:
+    url: "http://delivery:8005"
+  stock:
+    url: ${SERVICES_STOCK_URL:http://stock:8004}
+  user:
+    url: ${SERVICES_USER_URL:http://user-app:8000}

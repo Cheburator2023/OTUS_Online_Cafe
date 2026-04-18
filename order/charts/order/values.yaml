@@ -40,3 +40,7 @@ services:
     url: "http://delivery:8005"
   stock:
     url: "http://stock:8004"
+  user:
+    url: "http://user-app:8000"
+env:
+  DELIVERY_MIN_DELIVERY_TIME_MINUTES: "30"

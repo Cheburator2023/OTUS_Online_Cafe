@@ -2,19 +2,27 @@ package ru.otus.order.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import ru.otus.order.dto.*;
+import ru.otus.order.exception.NoDeliverySlotAvailableException;
 import ru.otus.order.model.IdempotencyRecord;
 import ru.otus.order.model.Order;
 import ru.otus.order.model.Order.OrderStatus;
+import ru.otus.order.model.OrderItem;
 import ru.otus.order.repository.IdempotencyRepository;
+import ru.otus.order.repository.OrderItemRepository;
 import ru.otus.order.repository.OrderRepository;
-import ru.otus.order.service.client.BillingServiceClient;
-import ru.otus.order.service.client.DeliveryServiceClient;
-import ru.otus.order.service.client.NotificationServiceClient;
-import ru.otus.order.service.client.StockServiceClient;
+import ru.otus.order.service.client.*;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -22,133 +30,35 @@ import ru.otus.order.service.client.StockServiceClient;
 public class OrderService {
 
     private final OrderRepository orderRepository;
+    private final OrderItemRepository orderItemRepository;
     private final IdempotencyRepository idempotencyRepository;
     private final BillingServiceClient billingClient;
     private final NotificationServiceClient notificationClient;
     private final StockServiceClient stockClient;
     private final DeliveryServiceClient deliveryClient;
+    private final UserServiceClient userClient;
+
+    @Lazy
+    @Autowired
+    private CartService cartService;
+
+    @Value("${delivery.min-delivery-time-minutes:30}")
+    private int minDeliveryTimeMinutes;
 
     @Transactional
     public OrderResponse createOrder(String idempotencyKey, CreateOrderRequest request) {
-        log.info("=== CREATE ORDER REQUEST (idempotent) ===");
-        log.info("IdempotencyKey: {}, userId: {}, amount: {}, productId: {}, quantity: {}, deliveryTime: {}",
-                idempotencyKey, request.userId(), request.amount(), request.productId(),
-                request.quantity(), request.deliveryTime());
-
-        // 1. Проверяем, не обрабатывался ли уже этот ключ
+        log.info("Creating order with idempotencyKey: {}", idempotencyKey);
         var existingRecord = idempotencyRepository.findByIdempotencyKey(idempotencyKey);
         if (existingRecord.isPresent()) {
             Order existingOrder = existingRecord.get().getOrder();
             log.info("Idempotency key {} already processed, returning existing order {}", idempotencyKey, existingOrder.getId());
             return toResponse(existingOrder);
         }
-
-        // 2. Создаём заказ со статусом FAILED (временный)
-        Order order = new Order(
-                request.userId(),
-                request.amount(),
-                OrderStatus.FAILED,
-                request.productId(),
-                request.quantity(),
-                request.deliveryTime()
-        );
-        order = orderRepository.save(order);
-        Long orderId = order.getId();
-        log.info("Order created with id: {} (temporary FAILED)", orderId);
-
-        boolean withdrawSuccess = false;
-        boolean stockReserved = false;
-        boolean deliveryReserved = false;
-        String notificationMessage = null;
-
-        try {
-            // Шаг 2: списание средств
-            log.info("Step 1: Withdraw from billing for user {}", request.userId());
-            withdrawSuccess = billingClient.withdraw(request.userId(), request.amount());
-            if (!withdrawSuccess) {
-                log.warn("Withdraw failed for user {}", request.userId());
-                notificationMessage = "Failed to process your order due to insufficient funds or billing error.";
-                sendNotification(request, notificationMessage);
-                // Сохраняем идемпотентную запись даже для неудачного заказа
-                saveIdempotencyRecord(idempotencyKey, order);
-                return toResponse(order);
-            }
-            log.info("Withdraw successful");
-
-            // Шаг 3: резервирование товара на складе
-            log.info("Step 2: Reserve stock for product {}", request.productId());
-            ReserveStockRequest stockRequest = new ReserveStockRequest(
-                    orderId, request.productId(), request.quantity());
-            ResponseEntity<Void> stockResponse = stockClient.reserve(stockRequest);
-            if (!stockResponse.getStatusCode().is2xxSuccessful()) {
-                throw new RuntimeException("Stock reservation failed with status: " + stockResponse.getStatusCode());
-            }
-            stockReserved = true;
-            log.info("Stock reserved successfully");
-
-            // Шаг 4: резервирование слота доставки
-            log.info("Step 3: Reserve delivery slot for time {}", request.deliveryTime());
-            ReserveDeliveryRequest deliveryRequest = new ReserveDeliveryRequest(
-                    orderId, request.deliveryTime()
-            );
-            ResponseEntity<Void> deliveryResponse = deliveryClient.reserve(deliveryRequest);
-            if (!deliveryResponse.getStatusCode().is2xxSuccessful()) {
-                throw new RuntimeException("Delivery reservation failed with status: " + deliveryResponse.getStatusCode());
-            }
-            deliveryReserved = true;
-            log.info("Delivery slot reserved successfully");
-
-            // Все шаги выполнены успешно → меняем статус заказа на SUCCESS
-            order.setStatus(OrderStatus.SUCCESS);
-            order = orderRepository.save(order);
-            notificationMessage = "Your order has been successfully processed.";
-            log.info("Order {} completed successfully", orderId);
-
-        } catch (Exception e) {
-            log.error("Error during order creation for orderId: {}", orderId, e);
-            notificationMessage = "Failed to process your order: " + e.getMessage();
-
-            // Компенсация: откатываем уже выполненные шаги в обратном порядке
-            if (deliveryReserved) {
-                try {
-                    ReleaseDeliveryRequest releaseDelivery = new ReleaseDeliveryRequest(orderId);
-                    deliveryClient.release(releaseDelivery);
-                    log.debug("Delivery release compensation done for order {}", orderId);
-                } catch (Exception ex) {
-                    log.error("Failed to release delivery during compensation for order {}", orderId, ex);
-                }
-            }
-            if (stockReserved) {
-                try {
-                    ReleaseStockRequest releaseStock = new ReleaseStockRequest(
-                            orderId, request.productId(), request.quantity()
-                    );
-                    stockClient.release(releaseStock);
-                    log.debug("Stock release compensation done for order {}", orderId);
-                } catch (Exception ex) {
-                    log.error("Failed to release stock during compensation for order {}", orderId, ex);
-                }
-            }
-            if (withdrawSuccess) {
-                try {
-                    billingClient.deposit(request.userId(), request.amount());
-                    log.debug("Deposit compensation done for user {}", request.userId());
-                } catch (Exception ex) {
-                    log.error("Failed to deposit during compensation for user {}", request.userId(), ex);
-                }
-            }
-            // Статус заказа остаётся FAILED (уже сохранён)
-        }
-
-        // Сохраняем идемпотентную запись (всегда после окончательной фиксации заказа)
+        OrderResponse orderResponse = createOrderFromCart(request);
+        Order order = orderRepository.findById(orderResponse.id())
+                .orElseThrow(() -> new RuntimeException("Order not found after creation"));
         saveIdempotencyRecord(idempotencyKey, order);
-
-        if (notificationMessage != null) {
-            sendNotification(request, notificationMessage);
-        }
-
-        log.info("=== END createOrder, order status = {}", order.getStatus());
-        return toResponse(order);
+        return orderResponse;
     }
 
     private void saveIdempotencyRecord(String idempotencyKey, Order order) {
@@ -160,27 +70,240 @@ public class OrderService {
         }
     }
 
-    private void sendNotification(CreateOrderRequest request, String message) {
-        NotificationRequest notification = new NotificationRequest(
-                request.userId(),
-                request.email(),
-                message
-        );
+    @Transactional
+    public OrderResponse createOrderFromCart(CreateOrderRequest request) {
+        log.info("Creating order from cart for userId: {}", request.userId());
+        // Определяем время доставки: если не указано, берём ближайший свободный слот
+        LocalDateTime finalDeliveryTime = request.deliveryTime();
+        if (finalDeliveryTime == null) {
+            List<DeliverySlotResponse> nearestSlots = deliveryClient.findNearestSlots(LocalDateTime.now(), 1);
+            if (nearestSlots.isEmpty()) {
+                throw new RuntimeException("No delivery slots available");
+            }
+            finalDeliveryTime = nearestSlots.get(0).timeSlot();
+            log.info("No delivery time specified, using nearest available slot: {}", finalDeliveryTime);
+        }
+
+        List<StockInfoResponse> allItemsInfo = request.items().stream()
+                .map(item -> stockClient.getProductInfo(item.productId(), item.quantity()))
+                .collect(Collectors.toList());
+
+        List<StockInfoResponse> availableItems = allItemsInfo.stream()
+                .filter(StockInfoResponse::available)
+                .collect(Collectors.toList());
+        List<StockInfoResponse> waitingItems = allItemsInfo.stream()
+                .filter(info -> !info.available() && info.preparationTimeMinutes() > 0)
+                .collect(Collectors.toList());
+
+        // ПРОВЕРКА: если клиент не согласен ждать, но есть товары на готовку -> ошибка (заказ НЕ создаётся)
+        if (!request.acceptWaiting() && !waitingItems.isEmpty()) {
+            String waitingProducts = waitingItems.stream()
+                    .map(info -> "Product " + info.productId() + " (" + info.preparationTimeMinutes() + " min)")
+                    .collect(Collectors.joining(", "));
+            throw new RuntimeException("The following products require preparation: " + waitingProducts +
+                    ". Please accept waiting or remove them from cart.");
+        }
+
+        List<StockInfoResponse> itemsToOrder = request.acceptWaiting() ? allItemsInfo : availableItems;
+        if (itemsToOrder.isEmpty()) {
+            throw new RuntimeException("No items available for order");
+        }
+
+        BigDecimal totalAmount = itemsToOrder.stream()
+                .map(info -> info.price().multiply(BigDecimal.valueOf(info.requestedQuantity())))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        boolean hasWaitingItems = itemsToOrder.stream().anyMatch(info -> !info.available());
+        OrderStatus initialStatus = hasWaitingItems ? OrderStatus.PENDING : OrderStatus.CONFIRMED;
+
+        Order order = new Order(request.userId(), totalAmount, initialStatus, finalDeliveryTime);
+        if (hasWaitingItems) {
+            int maxPreparationTime = itemsToOrder.stream()
+                    .filter(info -> !info.available())
+                    .mapToInt(StockInfoResponse::preparationTimeMinutes)
+                    .max().orElse(0);
+            order.setPreparationTimeMinutes(maxPreparationTime);
+        }
+        order = orderRepository.save(order);
+
+        for (StockInfoResponse info : itemsToOrder) {
+            OrderItem item = new OrderItem(info.productId(), info.requestedQuantity(), info.price());
+            order.addItem(item);
+        }
+        orderItemRepository.saveAll(order.getItems());
+
+        if (initialStatus == OrderStatus.CONFIRMED) {
+            try {
+                boolean withdrawSuccess = billingClient.withdraw(request.userId(), totalAmount);
+                if (!withdrawSuccess) {
+                    order.setStatus(OrderStatus.FAILED);
+                    orderRepository.save(order);
+                    sendNotification(request.userId(), request.email(), "Insufficient funds");
+                    return toResponse(order);
+                }
+
+                for (StockInfoResponse info : itemsToOrder) {
+                    stockClient.reserve(info.productId(), info.requestedQuantity(), order.getId());
+                }
+
+                deliveryClient.reserve(order.getId(), finalDeliveryTime);
+
+                order.setStatus(OrderStatus.CONFIRMED);
+                orderRepository.save(order);
+                sendNotification(request.userId(), null, "Order confirmed");
+                cartService.clearCart(request.userId());
+            } catch (Exception e) {
+                compensate(order, request, totalAmount);
+                order.setStatus(OrderStatus.FAILED);
+                orderRepository.save(order);
+                sendNotification(request.userId(), null, "Order failed: " + e.getMessage());
+            }
+        } else {
+            String waitingProducts = waitingItems.stream()
+                    .map(info -> "Product " + info.productId() + " (" + info.preparationTimeMinutes() + " min)")
+                    .collect(Collectors.joining(", "));
+            String message = String.format(
+                    "Your order requires confirmation. The following products need preparation: %s. Total waiting time: %d minutes. Please confirm or cancel.",
+                    waitingProducts, order.getPreparationTimeMinutes()
+            );
+            sendNotification(request.userId(), null, message);
+        }
+
+        return toResponse(order);
+    }
+
+    @Transactional
+    public OrderResponse confirmPendingOrder(Long orderId, boolean accept) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new RuntimeException("Order is not in pending state");
+        }
+        if (!accept) {
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            sendNotification(order.getUserId(), null, "Order cancelled by user");
+            return toResponse(order);
+        }
+
         try {
-            notificationClient.sendNotification(notification);
-            log.debug("Notification sent to user {}", request.userId());
+            LocalDateTime earliestDeliveryTime = LocalDateTime.now();
+            if (order.getPreparationTimeMinutes() != null && order.getPreparationTimeMinutes() > 0) {
+                earliestDeliveryTime = earliestDeliveryTime.plusMinutes(order.getPreparationTimeMinutes())
+                        .plusMinutes(minDeliveryTimeMinutes);
+            }
+            List<DeliverySlotResponse> nearestSlots = deliveryClient.findNearestSlots(earliestDeliveryTime, 5);
+            if (nearestSlots.isEmpty()) {
+                throw new NoDeliverySlotAvailableException("No delivery slots available after " + earliestDeliveryTime, nearestSlots);
+            }
+            DeliverySlotResponse selectedSlot = nearestSlots.get(0);
+            order.setDeliveryTime(selectedSlot.timeSlot());
+
+            boolean withdrawSuccess = billingClient.withdraw(order.getUserId(), order.getAmount());
+            if (!withdrawSuccess) {
+                order.setStatus(OrderStatus.FAILED);
+                orderRepository.save(order);
+                sendNotification(order.getUserId(), null, "Insufficient funds");
+                return toResponse(order);
+            }
+
+            for (OrderItem item : order.getItems()) {
+                stockClient.reserve(item.getProductId(), item.getQuantity(), order.getId());
+            }
+
+            deliveryClient.reserve(order.getId(), order.getDeliveryTime());
+
+            order.setStatus(OrderStatus.CONFIRMED);
+            order.setConfirmedAt(Instant.now());
+            orderRepository.save(order);
+            sendNotification(order.getUserId(), null, "Order confirmed");
+            cartService.clearCart(order.getUserId());
+        } catch (NoDeliverySlotAvailableException e) {
+            throw e;
         } catch (Exception e) {
-            log.error("Failed to send notification to user {}", request.userId(), e);
+            compensate(order, null, order.getAmount());
+            order.setStatus(OrderStatus.FAILED);
+            orderRepository.save(order);
+            sendNotification(order.getUserId(), null, "Order failed: " + e.getMessage());
+        }
+        return toResponse(order);
+    }
+
+    @Transactional
+    public void deliverOrder(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        if (order.getStatus() != OrderStatus.CONFIRMED && order.getStatus() != OrderStatus.READY_FOR_DELIVERY) {
+            throw new RuntimeException("Order cannot be delivered, current status: " + order.getStatus());
+        }
+        order.setStatus(OrderStatus.DELIVERED);
+        order.setDeliveredAt(Instant.now());
+        orderRepository.save(order);
+        deliveryClient.release(orderId);
+        for (OrderItem item : order.getItems()) {
+            stockClient.commitReservation(item.getProductId(), item.getQuantity());
+        }
+        sendNotification(order.getUserId(), null, "Your order has been delivered. Please confirm receipt.");
+    }
+
+    @Transactional
+    public void confirmReceipt(Long orderId) {
+        Order order = orderRepository.findById(orderId)
+                .orElseThrow(() -> new RuntimeException("Order not found"));
+        if (order.getStatus() != OrderStatus.DELIVERED) {
+            throw new RuntimeException("Order is not in delivered state");
+        }
+        order.setStatus(OrderStatus.COMPLETED);
+        order.setCompletedAt(Instant.now());
+        orderRepository.save(order);
+        sendNotification(order.getUserId(), null, "Thank you for confirming order receipt!");
+    }
+
+    private void compensate(Order order, CreateOrderRequest request, BigDecimal amount) {
+        try {
+            billingClient.deposit(order.getUserId(), amount);
+        } catch (Exception e) {
+            log.error("Failed to deposit during compensation", e);
+        }
+        try {
+            for (OrderItem item : order.getItems()) {
+                stockClient.release(item.getProductId(), item.getQuantity(), order.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to release stock during compensation", e);
+        }
+        try {
+            deliveryClient.release(order.getId());
+        } catch (Exception e) {
+            log.error("Failed to release delivery during compensation", e);
         }
     }
 
+    private void sendNotification(Long userId, String email, String message) {
+        String userEmail = email;
+        if (userEmail == null) {
+            userEmail = userClient.getUserEmail(userId);
+        }
+        if (userEmail == null) {
+            log.warn("Cannot send notification: no email for user {}", userId);
+            return;
+        }
+        notificationClient.sendNotification(new NotificationRequest(userId, userEmail, message));
+    }
+
     private OrderResponse toResponse(Order order) {
+        List<OrderItemResponse> itemResponses = order.getItems().stream()
+                .map(item -> new OrderItemResponse(item.getProductId(), item.getQuantity(), item.getPrice()))
+                .collect(Collectors.toList());
         return new OrderResponse(
                 order.getId(),
                 order.getUserId(),
                 order.getAmount(),
                 order.getStatus(),
-                order.getCreatedAt()
+                order.getCreatedAt(),
+                order.getDeliveryTime(),
+                order.getPreparationTimeMinutes(),
+                itemResponses
         );
     }
 }

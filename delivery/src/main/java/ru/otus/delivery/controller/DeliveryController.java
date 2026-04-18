@@ -8,13 +8,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
-import ru.otus.delivery.dto.DeliveryResponse;
-import ru.otus.delivery.dto.ErrorResponse;
-import ru.otus.delivery.dto.ReleaseDeliveryRequest;
-import ru.otus.delivery.dto.ReserveDeliveryRequest;
+import ru.otus.delivery.dto.*;
 import ru.otus.delivery.service.DeliveryService;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/delivery")
@@ -53,5 +54,13 @@ public class DeliveryController {
     })
     public void release(@Valid @RequestBody ReleaseDeliveryRequest request) {
         deliveryService.release(request);
+    }
+
+    @GetMapping("/slots/nearest")
+    @Operation(summary = "Find nearest available delivery slots")
+    public List<DeliverySlotResponse> findNearestSlots(
+            @RequestParam @DateTimeFormat(pattern = "yyyy-MM-dd HH:mm:ss") LocalDateTime afterTime,
+            @RequestParam(defaultValue = "5") int limit) {
+        return deliveryService.findNearestAvailableSlots(afterTime, limit);
     }
 }

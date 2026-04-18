@@ -2,7 +2,7 @@ replicaCount: 1
 image:
   repository: victor2023victorovich/billing-app
   tag: latest
-  pullPolicy: IfNotPresent
+  pullPolicy: Always
 service:
   type: NodePort
   port: 8001

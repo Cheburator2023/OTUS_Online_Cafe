@@ -77,3 +77,5 @@ springdoc:
 services:
   billing:
     url: http://billing-service:8001  # service name в Kubernetes
+  order:
+    url: http://order-app:8003

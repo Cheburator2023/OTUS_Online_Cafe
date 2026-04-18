@@ -14,6 +14,7 @@ import ru.otus.user.mapper.UserMapper;
 import ru.otus.user.model.User;
 import ru.otus.user.repository.UserRepository;
 import ru.otus.user.service.client.BillingServiceClient;
+import ru.otus.user.service.client.OrderServiceClient;
 
 import java.util.List;
 
@@ -25,6 +26,7 @@ public class UserServiceImpl implements UserService {
     private final PasswordEncoder passwordEncoder;
     private final MetricService metricService;
     private final BillingServiceClient billingServiceClient;
+    private final OrderServiceClient orderServiceClient;
 
     @Override
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
@@ -46,9 +48,12 @@ public class UserServiceImpl implements UserService {
             String randomPassword = generateRandomPassword();
             User user = new User(userRequest.name(), userRequest.email(),
                     passwordEncoder.encode(randomPassword));
+            user.setPhone(userRequest.phone());
+            user.setDeliveryAddress(userRequest.deliveryAddress());
             User savedUser = userRepository.save(user);
 
             billingServiceClient.createAccount(savedUser.getId(), savedUser.getEmail());
+            orderServiceClient.createCart(savedUser.getId());
 
             return userMapper.toResponse(savedUser);
         } catch (Exception e) {
@@ -90,6 +95,8 @@ public class UserServiceImpl implements UserService {
 
             user.setName(userRequest.name());
             user.setEmail(userRequest.email());
+            user.setPhone(userRequest.phone());
+            user.setDeliveryAddress(userRequest.deliveryAddress());
 
             User updatedUser = userRepository.save(user);
             return userMapper.toResponse(updatedUser);

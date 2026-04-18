@@ -6,6 +6,6 @@ import jakarta.validation.constraints.NotNull;
 
 public record CreateNotificationRequest(
         @NotNull Long userId,
-        @NotBlank @Email String email,
+        @Email String email,
         @NotBlank String message
 ) {}

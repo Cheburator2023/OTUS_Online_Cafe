@@ -136,7 +136,7 @@ kubectl get pods -n microservices -w
 POD_NAME=$(kubectl get pods -n microservices -l app.kubernetes.io/name=postgresql -o jsonpath="{.items[0].metadata.name}")
 
 # Подключимся к поду и выполним SQL
-kubectl exec -n microservices -it $POD_NAME -- bash -c "psql -U postgres <<EOF
+kubectl exec -n microservices -it $POD_NAME -- bash -c "PGPASSWORD=postgres psql -U postgres <<EOF
 CREATE DATABASE billing_db;
 CREATE DATABASE notification_db;
 CREATE DATABASE order_db;
@@ -167,7 +167,11 @@ kubectl create namespace ingress-nginx --dry-run=client -o yaml | kubectl apply 
 helm list -n ingress-nginx | grep ingress-nginx
 ```
 ```bash
-# Если есть, удалить:
+# И поды в сотоянии ImagePullBackOff
+kubectl get pods -n ingress-nginx
+```
+```bash
+# Если есть и состояние ImagePullBackOff, то удалить:
 helm uninstall ingress-nginx -n ingress-nginx
 ```
 
@@ -247,8 +251,7 @@ docker push victor2023victorovich/billing-app:latest
 docker push victor2023victorovich/notification-app:latest
 docker push victor2023victorovich/order-app:latest
 docker push victor2023victorovich/stock-app:latest
-
-
+docker push victor2023victorovich/delivery-app:latest
 ```
 
 ### 5. Установка микросервисов

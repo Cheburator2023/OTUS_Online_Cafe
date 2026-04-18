@@ -26,8 +26,18 @@ public class StockItem {
     @Column(name = "reserved_quantity", nullable = false)
     private Integer reservedQuantity = 0;
 
-    public StockItem(Long productId, Integer quantity) {
+    @Setter
+    @Column(name = "preparation_time_minutes")
+    private Integer preparationTimeMinutes = 0;
+
+    @Setter
+    @Column(name = "price", nullable = false, precision = 19, scale = 2)
+    private java.math.BigDecimal price = java.math.BigDecimal.ZERO;
+
+    public StockItem(Long productId, Integer quantity, java.math.BigDecimal price, Integer preparationTimeMinutes) {
         this.productId = productId;
         this.quantity = quantity;
+        this.price = price;
+        this.preparationTimeMinutes = preparationTimeMinutes;
     }
 }
